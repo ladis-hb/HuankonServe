@@ -1,10 +1,11 @@
+/* jshint esversion:8 */
 const Serialport = require('serialport')
 
 class Connection {
   constructor(portName, options) {
     this.options = options || {}
     this.options.autoOpen = true
-    this.state = Connection.states().INIT
+    this.state = Connection.states().INIT;
     this.port = null
     return new Promise((resolve, reject) => {
       this.port = new Serialport(portName, options, err => {
@@ -100,7 +101,7 @@ class Connection {
             if (i == end) {
               this.state = Connection.states().OPEN
               this.port.removeAllListeners()
-              resolve(Buffer.concat(bfArray, i).slice(3,end-2))
+              resolve(Buffer.concat(bfArray, i).slice(3, end - 2))
             }
           })
           break
@@ -128,7 +129,7 @@ class Connection {
       ERROR: 'ERROR',
       OPEN: 'OPEN',
       CLOSED: 'CLOSED',
-      INUSE: 'IN_USE',
+      INUSE: 'IN_USE'
     }
   }
 }
