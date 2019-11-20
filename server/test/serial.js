@@ -3,9 +3,11 @@ const serialIO = require('../serial-io/index')
 const ins = require('./result')
 
 async function test() {
-  let devlistOnline = (await serialIO.ports()).filter(el => {
-    return el.productId != undefined
-  })
+  let ports = await serialIO.ports()
+  let devlistOnline = ports.filter(el => el.productId != undefined)
+
+  console.log(await devlistOnline)
+
   /* //ups
     let con = await serialIO.connect('/dev/ttyUSB0',{baudRate:2400,terminator:'\r',timeoutInit:1000,timeoutRolling:1000})
     for(let el of Object.keys(ins)){        
@@ -22,7 +24,7 @@ async function test() {
     
     console.log(QPI); */
 
-  let con1 = await serialIO.connect('/dev/ttyUSB0', {
+  /* let con1 = await serialIO.connect('/dev/ttyUSB0', {
     baudRate: 9600,
     timeoutInit: 1000,
     timeoutRolling: 1000
@@ -38,7 +40,7 @@ async function test() {
       console.log(res)
     })
   }
-  console.log('end')
+  console.log('end') */
 }
 
 test()

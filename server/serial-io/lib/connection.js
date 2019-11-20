@@ -3,94 +3,82 @@ const Serialport = require('serialport')
 
 class Connection {
   constructor(portName, options) {
-    this.options = options || {}
-    this.options.autoOpen = true
-    this.state = Connection.states().INIT;
-    this.port = null
-    return new Promise((resolve, reject) => {
-      this.port = new Serialport(portName, options, err => {
-        if (err) {
-          console.log(1)
-
-          this.state = Connection.states().ERROR
-          reject(new Error(err))
-        } else {
-          this.state = Connection.states().OPEN
-          resolve(this)
-        }
-      })
-      this.port.on('error', () => {
-        console.log(2)
-        this.state = Connection.states().ERROR
-      })
-      this.port.on('close', () => {
-        this.state = Connection.states().CLOSED
-      })
+    this.options = Object.assign({ autoOpen: true }, options || {})
+    this.state = Connection.states().INIT
+    try {
+      this.port = new Serialport(portName, options)
+      this.state = Connection.states().OPEN
+    } catch (error) {
+      this.state = Connection.states().ERROR
+    }
+    this.port.on('error', err => {
+      console.log(err)
+      this.state = Connection.states().ERROR
+    })
+    this.port.on('close', err => {
+      console.log(err)
+      this.state = Connection.states().CLOSED
     })
   }
 
   close() {
-    return new Promise((resolve, reject) => {
-      if (this && this.port) {
-        this.port.close(err => {
-          if (err) {
-            console.log(3)
-            this.state = Connection.states().ERROR
-            reject(new Error(err))
-          } else {
-            this.state = Connection.states().CLOSED
-            resolve(this)
-          }
-        })
+    this.port.close(err => {
+      if (err) {
+        console.log(3)
+        this.state = Connection.states().ERROR
+      } else this.state = Connection.states().CLOSED
+    })
+  }
+
+  open() {
+    //this.port.isOpen
+    this.port.open(err => {
+      if (err) {
+        this.state = Connection.states().OPEN
+        return true
       } else {
-        reject(Error('not initialized yet'))
+        this.state = Connection.states().ERROR
+        return false
       }
     })
   }
 
-  send(content, opts) {
-    if (this.state !== Connection.states().OPEN) {
+  async send(content, opts) {
+    if (this.state !== Connection.states().OPEN)
       return Promise.reject(new Error('instance not in state OPEN'))
-    } /*  else if (typeof content !== 'string') {
-      return Promise.reject(new Error('first argument must be a string'))
-    } */
-    opts = Object.assign(this.options || {}, opts || {}) || {}
+
+    opts = Object.assign(this.options, opts || {})
     const terminator = opts.terminator || ''
     const timeoutInit = opts.timeoutInit || 100
-    const timeoutRolling = opts.timeoutRolling || 10
+    const timeoutRolling = opts.timeoutRolling || 100
 
     this.state = Connection.states().INUSE
-    let chunks = ''
-    let timer
+    let timer = null
 
-    return new Promise((resolve, reject) => {
-      switch (typeof content) {
-        case 'String': //232
+    let result = new Promise()
+    switch (typeof content) {
+      case 'string':
+        result = new Promise((res, rej) => {
+          let chunks = ''
           this.port.on('data', data => {
-            console.log(data)
-
-            if (timer) {
-              clearTimeout(timer)
-              timer = null
-            }
+            if (timer) clearTimeout(timer)
             chunks = chunks.concat(data)
-            if (terminator) {
-              if (chunks.includes(terminator)) {
-                this.state = Connection.states().OPEN
-                this.port.removeAllListeners()
-                resolve(chunks)
-              }
+            if (terminator && chunks.includes(terminator)) {
+              this.state = Connection.states().OPEN
+              this.port.removeAllListeners()
+              res(chunks)
             }
-            timer = setTimeout(() => {
-              resolve(chunks)
-            }, timeoutRolling)
           })
-          break
-        default:
-          let bfArray = []
-          let i = 0
-          let end = 0
+          timer = setTimeout(() => rej(false), timeoutRolling)
+        })
+        break
+      default:
+        result = new Promise((res, rej) => {
+          let bfArray = [],
+            i = 0,
+            end = 0
           this.port.on('data', data => {
+            if (timer) clearTimeout(timer)
             i += data.length
             bfArray.push(data)
             if (end == 0 && i > 2)
@@ -101,22 +89,16 @@ class Connection {
             if (i == end) {
               this.state = Connection.states().OPEN
               this.port.removeAllListeners()
-              resolve(Buffer.concat(bfArray, i).slice(3, end - 2))
+              res(Buffer.concat(bfArray, i).slice(3, end - 2))
             }
           })
-          break
-          break
-      }
-
-      this.port.write(content, err => {
-        if (err) {
-          reject(new Error(err))
-        }
-        timer = setTimeout(() => {
-          resolve(chunks)
-        }, timeoutInit)
-      })
-    })
+          timer = setTimeout(() => rej(false), timeoutRolling)
+        })
+        break
+    }
+    this.port.write(content)
+    await result
+    return result
   }
 
   getState() {
@@ -129,7 +111,7 @@ class Connection {
       ERROR: 'ERROR',
       OPEN: 'OPEN',
       CLOSED: 'CLOSED',
-      INUSE: 'IN_USE'
+      INUSE: 'IN_USE',
     }
   }
 }
