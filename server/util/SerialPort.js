@@ -2,7 +2,10 @@
 const Serialport = require('serialport')
 
 class Connection {
-  constructor(portName, options) {
+  constructor(
+    portName,
+    options = { autoOpen, terminator, timeoutRolling, timeoutInit, baudRate }
+  ) {
     this.options = Object.assign({ autoOpen: true }, options || {})
     this.state = Connection.states().INIT
     try {
@@ -55,7 +58,7 @@ class Connection {
     this.state = Connection.states().INUSE
     let timer = null
 
-    let result = new Promise()
+    let result = null
     switch (typeof content) {
       case 'string':
         result = new Promise((res, rej) => {
@@ -92,7 +95,11 @@ class Connection {
               res(Buffer.concat(bfArray, i).slice(3, end - 2))
             }
           })
-          timer = setTimeout(() => rej(false), timeoutRolling)
+          timer = setTimeout(() => {
+            this.state = Connection.states().OPEN
+            this.port.removeAllListeners()
+            rej(false)
+          }, timeoutRolling)
         })
         break
     }
@@ -111,12 +118,12 @@ class Connection {
       ERROR: 'ERROR',
       OPEN: 'OPEN',
       CLOSED: 'CLOSED',
-      INUSE: 'IN_USE',
+      INUSE: 'IN_USE'
     }
   }
 
   static async ports() {
-    let ports = await Serialport.list();
+    let ports = await Serialport.list()
     return ports.filter(el => el.productId != undefined)
   }
 }
